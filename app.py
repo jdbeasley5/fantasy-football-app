@@ -3,8 +3,13 @@ import plotly.express as px
 import streamlit as st
 
 from data_loader import default_years, find_latest_available_season, load_contracts, load_injuries, load_manual_overrides, load_playoff_stats, load_roster, load_roster_status, load_schedule, load_seasonal_stats, load_weekly_stats
-from predictions import add_draft_value, build_projections
 from scoring import SKILL_POSITIONS, add_league_points
+
+# predictions.py pulls in scikit-learn/scipy, which carry real import-time memory
+# overhead. Deferring the import until the Draft Prep button is actually clicked
+# means that cost is never paid at all for a session that doesn't use it — this
+# matters on memory-constrained deployments (e.g. Streamlit Community Cloud's 1GB
+# limit), where the crash traced back to this being imported unconditionally.
 
 TRAIN_START_SEASON = 2012
 
@@ -258,6 +263,8 @@ with tab_predict:
             st.session_state.draft_board_built = True
             st.rerun()
     else:
+        from predictions import add_draft_value, build_projections
+
         train_cohorts = tuple(range(TRAIN_START_SEASON, latest_season))
         with st.spinner("Training model and building projections (first run takes a bit longer)..."):
             seasonal_all = load_seasonal_stats(tuple(range(TRAIN_START_SEASON - 1, latest_season + 1)))
