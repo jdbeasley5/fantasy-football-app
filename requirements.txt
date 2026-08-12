@@ -5,3 +5,4 @@ numpy
 pyarrow
 certifi
 requests
+scikit-learn
