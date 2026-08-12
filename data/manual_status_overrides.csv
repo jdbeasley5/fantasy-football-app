@@ -1,0 +1,3 @@
+player_name,action,team,note
+Ricky Pearsall,exclude,,"Out for the 2026 season (PCL surgery, reported Aug 2026) - not yet reflected as RES/IR in the roster snapshot"
+Deebo Samuel,include,SF,"Signed with 49ers Aug 2026 - too recent to appear in the nflverse roster snapshot at all, was defaulting to excluded"
