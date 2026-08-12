@@ -247,72 +247,83 @@ with tab_predict:
         )
         st.caption(f"Edit `data/manual_status_overrides.csv` to add or remove hard overrides as news breaks.")
 
-    train_cohorts = tuple(range(TRAIN_START_SEASON, latest_season))
-    with st.spinner("Training model and building projections (first run takes a bit longer)..."):
-        seasonal_all = load_seasonal_stats(tuple(range(TRAIN_START_SEASON - 1, latest_season + 1)))
-        roster_all = load_roster(tuple(range(TRAIN_START_SEASON, latest_season + 1)))
-        weekly_defense = load_weekly_stats((latest_season,))
-        schedule_target = load_schedule(target_season)
-        playoff_all = load_playoff_stats(tuple(range(latest_season - 2, latest_season + 1)))
-        roster_status_target = load_roster_status(target_season)
-        injuries_prev_season = load_injuries((latest_season,))
-        contracts_df = load_contracts()
-        manual_overrides = load_manual_overrides()
-
-        proj, trained = build_projections(
-            seasonal_all, roster_all, weekly_defense, schedule_target, playoff_all,
-            roster_status_target, injuries_prev_season, contracts_df, manual_overrides,
-            latest_season, target_season, train_cohorts, weights,
-        )
-
-    if proj.empty:
-        st.warning("Not enough historical data yet to build projections.")
+    # Streamlit executes every tab's code on every rerun regardless of which tab is
+    # visible — without this gate, the app would train the model and download 13+
+    # years of historical data on every single page load, even for someone who never
+    # opens this tab. That's slow locally and can exceed free-tier resource limits
+    # when deployed.
+    if not st.session_state.get("draft_board_built", False):
+        st.info("Building the draft board trains a model and pulls 13+ years of historical data — takes a little while.")
+        if st.button("🔮 Build 2026 Draft Board", type="primary"):
+            st.session_state.draft_board_built = True
+            st.rerun()
     else:
-        with st.expander("Model comparison (test-set MSE, lower is better) & top predictive features"):
-            mse_df = pd.DataFrame(trained["mse_comparison"].items(), columns=["Model", "Test MSE"]).sort_values("Test MSE")
-            mse_df["In production?"] = mse_df["Model"].map(lambda m: "✅ Random Forest" if m == "Random Forest" else "")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.dataframe(mse_df.round(3), use_container_width=True, hide_index=True)
-                st.caption(f"Trained on {trained['n_training_rows']:,} player-seasons, cohorts {min(train_cohorts)}–{max(train_cohorts)}.")
-            with c2:
-                importances = trained["feature_importances"].head(8).sort_values()
-                fig_imp = px.bar(importances, orientation="h", labels={"value": "Importance", "index": ""})
-                fig_imp.update_layout(height=300, font=CHART_FONT, showlegend=False)
-                st.plotly_chart(fig_imp, use_container_width=True)
+        train_cohorts = tuple(range(TRAIN_START_SEASON, latest_season))
+        with st.spinner("Training model and building projections (first run takes a bit longer)..."):
+            seasonal_all = load_seasonal_stats(tuple(range(TRAIN_START_SEASON - 1, latest_season + 1)))
+            roster_all = load_roster(tuple(range(TRAIN_START_SEASON, latest_season + 1)))
+            weekly_defense = load_weekly_stats((latest_season,))
+            schedule_target = load_schedule(target_season)
+            playoff_all = load_playoff_stats(tuple(range(latest_season - 2, latest_season + 1)))
+            roster_status_target = load_roster_status(target_season)
+            injuries_prev_season = load_injuries((latest_season,))
+            contracts_df = load_contracts()
+            manual_overrides = load_manual_overrides()
 
-        proj = add_draft_value(proj, num_teams=num_teams)
+            proj, trained = build_projections(
+                seasonal_all, roster_all, weekly_defense, schedule_target, playoff_all,
+                roster_status_target, injuries_prev_season, contracts_df, manual_overrides,
+                latest_season, target_season, train_cohorts, weights,
+            )
 
-        positions_filter = st.multiselect("Positions", SKILL_POSITIONS, default=SKILL_POSITIONS)
-        board = proj[proj["position"].isin(positions_filter)].head(100).reset_index(drop=True)
-        board.index += 1
+        if proj.empty:
+            st.warning("Not enough historical data yet to build projections.")
+        else:
+            with st.expander("Model comparison (test-set MSE, lower is better) & top predictive features"):
+                mse_df = pd.DataFrame(trained["mse_comparison"].items(), columns=["Model", "Test MSE"]).sort_values("Test MSE")
+                mse_df["In production?"] = mse_df["Model"].map(lambda m: "✅ Random Forest" if m == "Random Forest" else "")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.dataframe(mse_df.round(3), use_container_width=True, hide_index=True)
+                    st.caption(f"Trained on {trained['n_training_rows']:,} player-seasons, cohorts {min(train_cohorts)}–{max(train_cohorts)}.")
+                with c2:
+                    importances = trained["feature_importances"].head(8).sort_values()
+                    fig_imp = px.bar(importances, orientation="h", labels={"value": "Importance", "index": ""})
+                    fig_imp.update_layout(height=300, font=CHART_FONT, showlegend=False)
+                    st.plotly_chart(fig_imp, use_container_width=True)
 
-        display_cols = ["player_name", "position", "team", "raw_projected_ppg", "team_dynamics_factor", "schedule_factor", "durability_rate", "weeks_flagged", "playoff_factor", "breakout_factor", "contract_situation", "projected_total", "projected_ppg", "draft_value"]
-        display = board[display_cols].copy()
-        display.columns = ["Player", "Pos", "Team", "Raw pts/game", "Team trend", "Schedule", "Durability", "Wks on report", "Playoff", "Breakout", "Contract situation", "Proj. total", "Proj. pts/game", "Draft value"]
-        factor_cols = ["Team trend", "Schedule", "Durability", "Playoff", "Breakout"]
-        for col in display.columns:
-            if col not in ("Player", "Pos", "Team", "Wks on report", "Contract situation"):
-                display[col] = display[col].round(3 if col in factor_cols else 2)
+            proj = add_draft_value(proj, num_teams=num_teams)
 
-        st.dataframe(display, use_container_width=True, height=600)
-        st.caption(
-            "'Team trend' through 'Breakout' are the stage-2 multipliers (1.00 = no effect). "
-            "'Wks on report' = weeks flagged Questionable/Doubtful/Out last season. "
-            "'Contract situation' is blank for most players (only shown for those with a tracked contract event)."
-        )
+            positions_filter = st.multiselect("Positions", SKILL_POSITIONS, default=SKILL_POSITIONS)
+            board = proj[proj["position"].isin(positions_filter)].head(100).reset_index(drop=True)
+            board.index += 1
 
-        st.divider()
-        st.subheader("By position")
-        st.caption("Same board, split out by position for position-specific draft planning.")
-        pos_tabs = st.tabs(SKILL_POSITIONS)
-        for pos, pos_tab in zip(SKILL_POSITIONS, pos_tabs):
-            with pos_tab:
-                pos_board = proj[proj["position"] == pos].head(20).reset_index(drop=True)
-                pos_board.index += 1
-                pos_display = pos_board[["player_name", "team", "projected_total", "projected_ppg", "draft_value"]].copy()
-                pos_display.columns = ["Player", "Team", "Proj. total pts", "Proj. pts/game", "Draft value"]
-                st.dataframe(pos_display.round(2), use_container_width=True)
+            display_cols = ["player_name", "position", "team", "raw_projected_ppg", "team_dynamics_factor", "schedule_factor", "durability_rate", "weeks_flagged", "playoff_factor", "breakout_factor", "contract_situation", "projected_total", "projected_ppg", "draft_value"]
+            display = board[display_cols].copy()
+            display.columns = ["Player", "Pos", "Team", "Raw pts/game", "Team trend", "Schedule", "Durability", "Wks on report", "Playoff", "Breakout", "Contract situation", "Proj. total", "Proj. pts/game", "Draft value"]
+            factor_cols = ["Team trend", "Schedule", "Durability", "Playoff", "Breakout"]
+            for col in display.columns:
+                if col not in ("Player", "Pos", "Team", "Wks on report", "Contract situation"):
+                    display[col] = display[col].round(3 if col in factor_cols else 2)
+
+            st.dataframe(display, use_container_width=True, height=600)
+            st.caption(
+                "'Team trend' through 'Breakout' are the stage-2 multipliers (1.00 = no effect). "
+                "'Wks on report' = weeks flagged Questionable/Doubtful/Out last season. "
+                "'Contract situation' is blank for most players (only shown for those with a tracked contract event)."
+            )
+
+            st.divider()
+            st.subheader("By position")
+            st.caption("Same board, split out by position for position-specific draft planning.")
+            pos_tabs = st.tabs(SKILL_POSITIONS)
+            for pos, pos_tab in zip(SKILL_POSITIONS, pos_tabs):
+                with pos_tab:
+                    pos_board = proj[proj["position"] == pos].head(20).reset_index(drop=True)
+                    pos_board.index += 1
+                    pos_display = pos_board[["player_name", "team", "projected_total", "projected_ppg", "draft_value"]].copy()
+                    pos_display.columns = ["Player", "Team", "Proj. total pts", "Proj. pts/game", "Draft value"]
+                    st.dataframe(pos_display.round(2), use_container_width=True)
 
 st.divider()
 st.caption(
