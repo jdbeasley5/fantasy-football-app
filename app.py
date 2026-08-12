@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from data_loader import default_years, find_latest_available_season, load_contracts, load_injuries, load_manual_overrides, load_playoff_stats, load_roster, load_roster_status, load_schedule, load_seasonal_stats, load_weekly_stats
+from data_loader import HISTORY_TAB_COLUMNS, default_years, find_latest_available_season, load_contracts, load_injuries, load_manual_overrides, load_playoff_stats, load_roster, load_roster_status, load_schedule, load_seasonal_stats, load_weekly_stats
 from scoring import SKILL_POSITIONS, add_league_points
 
 # predictions.py pulls in scikit-learn/scipy, which carry real import-time memory
@@ -49,7 +49,7 @@ with st.sidebar:
     }
 
 with st.spinner("Loading NFL data (first run downloads and caches locally)..."):
-    df = load_seasonal_stats(tuple(years))
+    df = load_seasonal_stats(tuple(years), columns=HISTORY_TAB_COLUMNS)
     df = add_league_points(df)
 
 df = df[df["position"].isin(SKILL_POSITIONS)]
