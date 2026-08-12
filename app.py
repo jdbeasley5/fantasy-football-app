@@ -23,7 +23,7 @@ st.caption("PPR + TE Premium scoring — 5-year performance history and 2026 dra
 
 with st.sidebar:
     st.header("Settings")
-    n_years = st.slider("Seasons to include (history tabs)", min_value=1, max_value=5, value=5)
+    n_years = st.slider("Seasons to include (history tabs)", min_value=1, max_value=5, value=3)
     years = default_years(n_years)
     st.caption(f"Seasons: {years[0]}–{years[-1]}")
 
