@@ -24,7 +24,7 @@ Steps:
 
 Do not modify any other file in the repo. There's no CI/tests to run here -- just the CSV update and a commit/push if there's something to add.
 PROMPT
-)" --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch" >> "$LOGFILE" 2>&1
+)" --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch" >> "$LOGFILE" 2>&1
 
 echo "=== done $(date) ===" >> "$LOGFILE"
 echo "" >> "$LOGFILE"

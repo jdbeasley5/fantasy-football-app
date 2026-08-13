@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 data/*.parquet
 !data/manual_status_overrides.csv
+daily_update.log
+daily_update_launchd.log
+daily_update_launchd.err
