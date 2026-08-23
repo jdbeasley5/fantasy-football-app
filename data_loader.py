@@ -151,6 +151,7 @@ HISTORY_TAB_COLUMNS = (
     "player_id", "player_name", "position", "team", "season", "games",
     "fantasy_points_ppr", "receptions", "targets",
     "rushing_yards", "receiving_yards", "passing_yards",
+    "passing_first_downs", "rushing_first_downs", "receiving_first_downs",
 )
 
 

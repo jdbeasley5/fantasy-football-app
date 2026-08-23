@@ -19,7 +19,7 @@ CHART_FONT = dict(size=15)
 COLOR_SEQUENCE = px.colors.qualitative.Bold
 
 st.title("🏈 Fantasy Football Analytics")
-st.caption("PPR + TE Premium scoring — 5-year performance history and 2026 draft projections, powered by nflverse data")
+st.caption("PPR + TE Premium + First-Down Premium scoring — 5-year performance history and 2026 draft projections, powered by nflverse data")
 
 with st.sidebar:
     st.header("Settings")
@@ -36,7 +36,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Draft board settings")
-    num_teams = st.number_input("Number of teams in your league", min_value=4, max_value=20, value=12)
+    num_teams = st.number_input("Number of teams in your league", min_value=4, max_value=20, value=14)
 
     st.caption("Stage-2 adjustment weights — how much each factor can move a player off the model's raw baseline.")
     weights = {
@@ -55,15 +55,15 @@ with st.spinner("Loading NFL data (first run downloads and caches locally)..."):
 df = df[df["position"].isin(SKILL_POSITIONS)]
 df = df[df["games"].fillna(0) >= min_games]
 
-tab_rank, tab_trends, tab_player, tab_predict = st.tabs(
-    ["📊 Position & Player Rankings", "📈 5-Year Trends", "🔍 Player Deep Dive", "🔮 2026 Draft Prep"]
+tab_rank, tab_trends, tab_player, tab_predict, tab_tool = st.tabs(
+    ["📊 Position & Player Rankings", "📈 5-Year Trends", "🔍 Player Deep Dive", "🔮 2026 Draft Prep", "🆚 Draft Day Tool"]
 )
 
 # ---------------------------------------------------------------------------
 with tab_rank:
     st.subheader("Which position scores the most, right now?")
     st.caption(
-        f"Average PPR (+ TE Premium) points/game for each position's top {top_n_startable} "
+        f"Average PPR (+ TE Premium + First-Down Premium) points/game for each position's top {top_n_startable} "
         "players — reflects the players who'd actually be starting in a fantasy lineup."
     )
 
@@ -184,7 +184,8 @@ with tab_predict:
     st.caption(
         f"Two-stage projection: a trained model predicts each player's raw {target_season} pace from "
         f"their own history, then six weighted factors (sidebar) — including real injury reports, current "
-        f"roster status, and contract data — adjust it into a final draft-value ranking for a {num_teams}-team league."
+        f"roster status, and contract data — adjust it into a final draft-value ranking for a {num_teams}-team, "
+        f"single-QB league."
     )
 
     with st.expander("How this projection works (and what it can't see)"):
@@ -300,6 +301,7 @@ with tab_predict:
                     st.plotly_chart(fig_imp, use_container_width=True)
 
             proj = add_draft_value(proj, num_teams=num_teams)
+            st.session_state["proj_board"] = proj
 
             positions_filter = st.multiselect("Positions", SKILL_POSITIONS, default=SKILL_POSITIONS)
             board = proj[proj["position"].isin(positions_filter)].head(100).reset_index(drop=True)
@@ -332,8 +334,82 @@ with tab_predict:
                     pos_display.columns = ["Player", "Team", "Proj. total pts", "Proj. pts/game", "Draft value"]
                     st.dataframe(pos_display.round(2), use_container_width=True)
 
+# ---------------------------------------------------------------------------
+with tab_tool:
+    st.subheader("🆚 Draft Day Tool")
+    st.caption(
+        "Built for speed during a live draft: cross players off as they're taken, see who's still "
+        "worth grabbing, and put two or three specific names side by side when you're stuck deciding."
+    )
+
+    proj_board = st.session_state.get("proj_board")
+    if proj_board is None or proj_board.empty:
+        st.info("Build the draft board first in the '🔮 2026 Draft Prep' tab, then come back here — this "
+                "tool reuses that same board so it doesn't retrain anything.")
+    else:
+        all_names = sorted(proj_board["player_name"].unique())
+
+        if "drafted_players" not in st.session_state:
+            st.session_state["drafted_players"] = []
+
+        col_mark, col_clear = st.columns([5, 1])
+        with col_mark:
+            st.multiselect(
+                "Mark players as drafted (by anyone at the table) to cross them off Best Available",
+                all_names,
+                key="drafted_players",
+            )
+        with col_clear:
+            st.write("")
+            if st.button("Clear list"):
+                st.session_state["drafted_players"] = []
+                st.rerun()
+
+        undrafted = proj_board[~proj_board["player_name"].isin(st.session_state["drafted_players"])]
+        st.caption(f"{len(st.session_state['drafted_players'])} drafted · {len(undrafted)} still available")
+
+        st.divider()
+        col_best, col_compare = st.columns([3, 2])
+
+        with col_best:
+            st.markdown("**Best available**")
+            tool_pos_filter = st.multiselect("Position", SKILL_POSITIONS, default=SKILL_POSITIONS, key="tool_pos_filter")
+            best = undrafted[undrafted["position"].isin(tool_pos_filter)].sort_values("draft_value", ascending=False).head(40).reset_index(drop=True)
+            best.index += 1
+            best_display = best[["player_name", "position", "team", "projected_ppg", "projected_total", "draft_value"]].copy()
+            best_display.columns = ["Player", "Pos", "Team", "Pts/gm", "Total", "Value"]
+            st.dataframe(best_display.round(1), use_container_width=True, height=560)
+
+        with col_compare:
+            st.markdown("**Compare head-to-head**")
+            compare_names = st.multiselect(
+                "Pick 2–4 players stuck on the clock",
+                all_names,
+                max_selections=4,
+                key="compare_players",
+            )
+            if len(compare_names) < 2:
+                st.caption("Pick at least 2 players to compare.")
+            else:
+                cmp_df = proj_board.set_index("player_name").loc[compare_names]
+                for name, row in cmp_df.iterrows():
+                    drafted_tag = " 🚫 already drafted" if name in st.session_state["drafted_players"] else ""
+                    with st.container(border=True):
+                        st.markdown(f"**{name}**{drafted_tag}")
+                        st.caption(f"{row['position']} · {row['team']}")
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Pts/gm", f"{row['projected_ppg']:.1f}")
+                        m2.metric("Total", f"{row['projected_total']:.0f}")
+                        m3.metric("Value", f"{row['draft_value']:.0f}")
+                        st.caption(
+                            f"Team trend {row['team_dynamics_factor']:.2f} · "
+                            f"Schedule {row['schedule_factor']:.2f} · "
+                            f"Durability {row['durability_rate']:.2f}"
+                        )
+
 st.divider()
 st.caption(
     f"Data source: nflverse. History tabs show seasons {years[0]}–{years[-1]}. "
-    "Scoring: PPR with a 0.5 TE Premium bonus per reception."
+    "Scoring: PPR with a 0.5 TE Premium bonus per reception and a 0.5 First-Down Premium bonus "
+    "per rushing/receiving/passing first down. Single-QB format (no superflex)."
 )
