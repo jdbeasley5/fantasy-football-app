@@ -279,3 +279,31 @@ def apply_adjustments(
 
     df["projected_total"] = df["projected_ppg"] * df["projected_games"]
     return df.sort_values("projected_total", ascending=False).reset_index(drop=True)
+
+
+def add_context_ranks(proj: pd.DataFrame, seasonal_all: pd.DataFrame, latest_season: int) -> pd.DataFrame:
+    """Attaches the team-context signal that matters most for each position:
+    - RBs get their team's O-line rank (proxied by team rushing EPA/carry last season —
+      real run-blocking grades aren't in this data, so this conflates line play with the
+      backfield's own talent, but it's a real, current, data-grounded stand-in).
+    - WRs/TEs get their team's starting QB rank (by that QB's own projected PPG here).
+    Both are on a 1 (best) to 32 (worst) scale, matching the whole league.
+    """
+    proj = proj.copy()
+
+    rb_rush = seasonal_all[(seasonal_all["position"] == "RB") & (seasonal_all["season"] == latest_season)]
+    team_carries = rb_rush.groupby("team")["carries"].sum()
+    team_epa = rb_rush.groupby("team")["rushing_epa"].sum()
+    team_rush_epa_per_carry = (team_epa / team_carries).replace([float("inf"), -float("inf")], pd.NA)
+    ol_rank = team_rush_epa_per_carry.rank(ascending=False, method="min")
+
+    qb_proj = proj[proj["position"] == "QB"].sort_values("raw_projected_ppg", ascending=False)
+    team_qb_quality = qb_proj.groupby("team")["raw_projected_ppg"].first()
+    qb_rank = team_qb_quality.rank(ascending=False, method="min")
+
+    proj["ol_rank"] = proj["team"].map(ol_rank)
+    proj["qb_rank"] = proj["team"].map(qb_rank)
+    proj.loc[proj["position"] != "RB", "ol_rank"] = pd.NA
+    proj.loc[~proj["position"].isin(["WR", "TE"]), "qb_rank"] = pd.NA
+
+    return proj

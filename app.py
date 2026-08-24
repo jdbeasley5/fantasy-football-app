@@ -301,6 +301,10 @@ with tab_predict:
                     st.plotly_chart(fig_imp, use_container_width=True)
 
             proj = add_draft_value(proj, num_teams=num_teams)
+
+            from adjustments import add_context_ranks
+            proj = add_context_ranks(proj, seasonal_all, latest_season)
+
             st.session_state["proj_board"] = proj
 
             positions_filter = st.multiselect("Positions", SKILL_POSITIONS, default=SKILL_POSITIONS)
@@ -341,6 +345,11 @@ with tab_tool:
         "Built for speed during a live draft: cross players off as they're taken, see who's still "
         "worth grabbing, and put two or three specific names side by side when you're stuck deciding."
     )
+    st.caption(
+        "'OL Rank' (RBs) and 'QB Rank' (WR/TE) are 1 (best) to 32 (worst) team-context signals: OL Rank "
+        "is proxied by team rushing EPA/carry last season (no real run-blocking grades in this data, so "
+        "it also reflects the backfield's own talent), QB Rank is the team's own projected starting QB."
+    )
 
     proj_board = st.session_state.get("proj_board")
     if proj_board is None or proj_board.empty:
@@ -376,8 +385,10 @@ with tab_tool:
             tool_pos_filter = st.multiselect("Position", SKILL_POSITIONS, default=SKILL_POSITIONS, key="tool_pos_filter")
             best = undrafted[undrafted["position"].isin(tool_pos_filter)].sort_values("draft_value", ascending=False).head(40).reset_index(drop=True)
             best.index += 1
-            best_display = best[["player_name", "position", "team", "projected_ppg", "projected_total", "draft_value"]].copy()
-            best_display.columns = ["Player", "Pos", "Team", "Pts/gm", "Total", "Value"]
+            best_display = best[["player_name", "position", "team", "projected_ppg", "projected_total", "draft_value", "contract_situation", "ol_rank", "qb_rank"]].copy()
+            best_display["ol_rank"] = best_display["ol_rank"].apply(lambda x: str(int(x)) if pd.notna(x) else "")
+            best_display["qb_rank"] = best_display["qb_rank"].apply(lambda x: str(int(x)) if pd.notna(x) else "")
+            best_display.columns = ["Player", "Pos", "Team", "Pts/gm", "Total", "Value", "Contract", "OL Rank", "QB Rank"]
             st.dataframe(best_display.round(1), use_container_width=True, height=560)
 
         with col_compare:
@@ -406,6 +417,15 @@ with tab_tool:
                             f"Schedule {row['schedule_factor']:.2f} · "
                             f"Durability {row['durability_rate']:.2f}"
                         )
+                        context_bits = []
+                        if row.get("contract_situation"):
+                            context_bits.append(f"Contract: {row['contract_situation']}")
+                        if pd.notna(row.get("ol_rank")):
+                            context_bits.append(f"OL Rank: {int(row['ol_rank'])}/32")
+                        if pd.notna(row.get("qb_rank")):
+                            context_bits.append(f"QB Rank: {int(row['qb_rank'])}/32")
+                        if context_bits:
+                            st.caption(" · ".join(context_bits))
 
 st.divider()
 st.caption(
