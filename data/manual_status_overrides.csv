@@ -20,3 +20,4 @@ Kayshon Boutte,include,HOU,"Traded from Patriots to Texans Aug 24, 2026 for S Ja
 Ty Chandler,exclude,,"Out for the 2026 season (knee injury, confirmed by Saints HC Kellen Moore Aug 25, 2026) - was set to share NO backfield behind Kamara, not yet reflected as IR/RES in the roster snapshot"
 Calvin Austin III,exclude,,"Out for the 2026 season (torn ACL in practice, reported Aug 25, 2026) - Giants WR signed in free agency this offseason, not yet reflected as IR/RES in the roster snapshot"
 Trey Benson,exclude,,"Out for the 2026 season (knee/meniscus, waived with injury designation and reverted to Cardinals IR Aug 24, 2026) - not yet reflected as IR/RES in the roster snapshot"
+Jonnu Smith,include,GB,"Signed with Packers Aug 27, 2026 as TE depth behind Tucker Kraft (recovering from ACL surgery) and injured Luke Musgrave (neck) - too recent to appear in the nflverse roster snapshot, was defaulting to excluded"
