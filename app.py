@@ -19,7 +19,7 @@ CHART_FONT = dict(size=15)
 COLOR_SEQUENCE = px.colors.qualitative.Bold
 
 st.title("🏈 Fantasy Football Analytics")
-st.caption("PPR + TE Premium + First-Down Premium scoring — 5-year performance history and 2026 draft projections, powered by nflverse data")
+st.caption("Your league's real scoring (PPR, +5 passing TD, first-down bonuses, TE Premium) — 5-year performance history and 2026 draft projections, powered by nflverse data")
 
 with st.sidebar:
     st.header("Settings")
@@ -63,7 +63,7 @@ tab_rank, tab_trends, tab_player, tab_predict, tab_tool = st.tabs(
 with tab_rank:
     st.subheader("Which position scores the most, right now?")
     st.caption(
-        f"Average PPR (+ TE Premium + First-Down Premium) points/game for each position's top {top_n_startable} "
+        f"Average points/game under your league's real scoring rules for each position's top {top_n_startable} "
         "players — reflects the players who'd actually be starting in a fantasy lineup."
     )
 
@@ -224,7 +224,10 @@ with tab_predict:
 
             **Caveats:** still can't see {target_season} trades that swap a player's role (only their team),
             coaching changes, holdouts, or brand-new injuries after this data was pulled. True rookies with
-            zero prior NFL seasons can't be projected — they won't appear below.
+            zero prior NFL seasons can't be projected — they won't appear below. Scoring also doesn't include
+            the league's 40+/50+ yard big-play bonuses or 100/200-yard single-game bonuses (no play-by-play
+            or per-game data in this pipeline) — worth a modest number of extra points/season for boom-type
+            players like deep-threat WRs and bell-cow RBs.
             """
         )
 
@@ -430,6 +433,10 @@ with tab_tool:
 st.divider()
 st.caption(
     f"Data source: nflverse. History tabs show seasons {years[0]}–{years[-1]}. "
-    "Scoring: PPR with a 0.5 TE Premium bonus per reception and a 0.5 First-Down Premium bonus "
-    "per rushing/receiving/passing first down. Single-QB format (no superflex)."
+    "Scoring: PPR, +5/passing TD, -1/INT thrown, +0.25 per passing first down, +0.5 per rushing/receiving "
+    "first down, and a full extra point per TE reception (2 pts/catch total). Single-QB format (no superflex). "
+    "Not modeled (needs play-by-play or per-game data this app doesn't pull): the league's 40+/50+ yard "
+    "big-play bonuses and 100/200-yard single-game bonuses — worth a handful of extra points/season for "
+    "boom-type players. Kicker and Team/Special Teams Defense scoring aren't modeled; this app only ranks "
+    "QB/RB/WR/TE."
 )
